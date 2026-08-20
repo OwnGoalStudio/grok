@@ -34,6 +34,12 @@ stamp_input="$UPSTREAM_REPO@$UPSTREAM_REF"$'\n'
 for patch in "${patches[@]}"; do
     stamp_input+="$(shasum -a 256 "$patch" | cut -d ' ' -f 1)  $(basename "$patch")"$'\n'
 done
+vendor_dir="$repository_root/vendor"
+if [[ -d "$vendor_dir" ]]; then
+    while IFS= read -r -d '' file; do
+        stamp_input+="$(shasum -a 256 "$file" | cut -d ' ' -f 1)  vendor/${file#"$vendor_dir"/}"$'\n'
+    done < <(find "$vendor_dir" -type f -print0 | sort -z)
+fi
 stamp="$(printf '%s' "$stamp_input" | shasum -a 256 | cut -d ' ' -f 1)"
 stamp_file="$work_dir/.owngoal-source-stamp"
 
@@ -68,6 +74,12 @@ for patch in "${patches[@]}"; do
         exit 65
     fi
 done
+
+if [[ -d "$vendor_dir" ]]; then
+    echo "copying vendor/ into the checkout"
+    rm -rf "$work_dir/vendor"
+    /usr/bin/ditto "$vendor_dir" "$work_dir/vendor"
+fi
 
 printf '%s\n' "$stamp" >"$stamp_file"
 echo "prepared $UPSTREAM_REF with ${#patches[@]} patch(es)"
