@@ -1,0 +1,43 @@
+diff --git a/crates/codegen/xai-grok-shell-base/Cargo.toml b/crates/codegen/xai-grok-shell-base/Cargo.toml
+--- a/crates/codegen/xai-grok-shell-base/Cargo.toml
++++ b/crates/codegen/xai-grok-shell-base/Cargo.toml
+@@ -32,7 +32,9 @@ xai-tty-utils = { workspace = true }
+ [target.'cfg(unix)'.dependencies]
+ libc = { workspace = true }
+ nix = { workspace = true }
++
++[target.'cfg(all(unix, not(target_os = "ios")))'.dependencies]
+ # No `flamegraph` feature: that pulls in inferno (CDDL-1.0), which we keep out
+ # of shipped binaries. stop() emits folded stacks via pprof's public Report
+ # API instead; render externally with speedscope or inferno-flamegraph.
+ pprof = { workspace = true }
+diff --git a/crates/codegen/xai-grok-shell-base/src/cpu_profile.rs b/crates/codegen/xai-grok-shell-base/src/cpu_profile.rs
+--- a/crates/codegen/xai-grok-shell-base/src/cpu_profile.rs
++++ b/crates/codegen/xai-grok-shell-base/src/cpu_profile.rs
+@@ -1,6 +1,6 @@
+ use std::fs;
+-// OpenOptions is only used by the Unix-only profiler implementation.
+-#[cfg(unix)]
++// OpenOptions is only used by the supported Unix profiler implementation.
++#[cfg(all(unix, not(target_os = "ios")))]
+ use std::fs::OpenOptions;
+ use std::path::{Path, PathBuf};
+ 
+@@ -558,7 +558,7 @@ impl CpuProfileManager {
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(all(unix, not(target_os = "ios")))]
+ mod platform {
+     use std::fmt::Write as _;
+     use std::io::Write as _;
+@@ -692,7 +692,7 @@ mod platform {
+     }
+ }
+ 
+-#[cfg(not(unix))]
++#[cfg(any(not(unix), target_os = "ios"))]
+ mod platform {
+     use super::*;
+ 

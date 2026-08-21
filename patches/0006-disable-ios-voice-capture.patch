@@ -1,0 +1,27 @@
+diff --git a/crates/codegen/xai-grok-pager/Cargo.toml b/crates/codegen/xai-grok-pager/Cargo.toml
+--- a/crates/codegen/xai-grok-pager/Cargo.toml
++++ b/crates/codegen/xai-grok-pager/Cargo.toml
+@@ -99,8 +99,5 @@ xai-grok-config = { workspace = true }
+-# Voice dictation. `audio` (mic capture) is enabled on every target. On
+-# macOS/Windows it links cpal; on Linux it compiles a subprocess-recorder
+-# backend instead, so cpal -> alsa-sys never reaches the static musl binary
+-# (cpal is target-gated to non-Linux inside xai-grok-voice).
+-xai-grok-voice = { path = "../xai-grok-voice", default-features = false, features = ["audio"] }
++# Voice dictation. Target tables below enable audio only where capture exists;
++# iOS retains the STT types but reports microphone capture as unavailable.
+ xai-grok-shell = { workspace = true }
+ # The status-line contract: the config the user writes and the payload the
+ # agent sends. A leaf crate rather than the agent's, so the client reads it
+@@ -156,5 +155,12 @@ parking_lot.workspace = true
+ # signal-hook: SIGWINCH handler for the `grok wrap` PTY wrapper (pty_wrap.rs).
+ # libc: poll/read for non-blocking terminal reads in theme/osc11.rs.
++[target.'cfg(not(target_os = "ios"))'.dependencies]
++xai-grok-voice = { path = "../xai-grok-voice", default-features = false, features = ["audio"] }
++
++[target.'cfg(target_os = "ios")'.dependencies]
++# No iOS microphone backend exists; retain STT types with capture unavailable.
++xai-grok-voice = { path = "../xai-grok-voice", default-features = false }
++
+ [target.'cfg(unix)'.dependencies]
+ nix = { workspace = true, features = ["signal"] }
+ signal-hook = { workspace = true }

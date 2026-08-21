@@ -1,0 +1,26 @@
+diff --git a/crates/codegen/xai-grok-pager-render/src/theme/system_appearance.rs b/crates/codegen/xai-grok-pager-render/src/theme/system_appearance.rs
+--- a/crates/codegen/xai-grok-pager-render/src/theme/system_appearance.rs
++++ b/crates/codegen/xai-grok-pager-render/src/theme/system_appearance.rs
+@@ -111,6 +111,7 @@ fn resolve_appearance_chain(
+ /// before SSH. Must not consult env hints — those may be a previous wrap
+ /// hop's snapshot.
+ #[must_use]
++#[cfg(not(target_os = "ios"))]
+ pub fn detect_desktop() -> Option<SystemAppearance> {
+     match dark_light::detect() {
+         Ok(dark_light::Mode::Dark) => Some(SystemAppearance::Dark),
+@@ -121,6 +122,14 @@ pub fn detect_desktop() -> Option<SystemAppearance> {
+     }
+ }
+ 
++/// iOS has no desktop appearance API in dark-light; continue through the
++/// existing environment and OSC 11 fallbacks instead.
++#[must_use]
++#[cfg(target_os = "ios")]
++pub fn detect_desktop() -> Option<SystemAppearance> {
++    None
++}
++
+ /// Inner detection via desktop APIs, explicit stamps, cached OSC 11, then
+ /// `COLORFGBG` (no mock, no new OSC 11 probe).
+ fn detect_without_mock() -> Option<SystemAppearance> {

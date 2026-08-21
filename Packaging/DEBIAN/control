@@ -14,5 +14,5 @@ Maintainer: OwnGoal Studio <not-gonna-reply@owngoal.dev>
 Author: SpaceXAI <https://github.com/xai-org/grok-build>
 Section: Utilities
 Priority: optional
-Depends: firmware (>= @MIN_IOS@), uikittools
+Depends: firmware (>= @MIN_IOS@), ripgrep, uikittools
 Installed-Size: @INSTALLED_SIZE@

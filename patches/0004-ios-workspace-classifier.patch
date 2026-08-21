@@ -1,0 +1,12 @@
+diff --git a/crates/codegen/xai-file-utils/src/workspace_classifier.rs b/crates/codegen/xai-file-utils/src/workspace_classifier.rs
+--- a/crates/codegen/xai-file-utils/src/workspace_classifier.rs
++++ b/crates/codegen/xai-file-utils/src/workspace_classifier.rs
+@@ -108,7 +108,7 @@ fn is_platform_system_dir(cwd: &Path) -> bool {
+     false
+ }
+ 
+-#[cfg(target_os = "macos")]
++#[cfg(any(target_os = "macos", target_os = "ios"))]
+ fn is_platform_home_excluded(cwd: &Path, home: &Path) -> bool {
+     if cwd.starts_with(home.join("Library"))
+         && !cwd.starts_with(home.join("Library/Mobile Documents"))
