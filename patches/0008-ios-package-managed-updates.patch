@@ -1,0 +1,29 @@
+diff --git a/crates/codegen/xai-grok-pager-bin/src/main.rs b/crates/codegen/xai-grok-pager-bin/src/main.rs
+index 219d048..6f1dd73 100644
+--- a/crates/codegen/xai-grok-pager-bin/src/main.rs
++++ b/crates/codegen/xai-grok-pager-bin/src/main.rs
+@@ -2336,6 +2336,11 @@ fn build_update_config() -> UpdateConfig {
+ /// Central gate for auto-update checks; add new suppression rules here,
+ /// not at call sites.
+ fn should_check_for_updates(no_auto_update_flag: bool) -> bool {
++    // iOS installs are owned by dpkg and must retain the package's signature,
++    // entitlements, and trust-cache registration.
++    if cfg!(target_os = "ios") {
++        return false;
++    }
+     if cfg!(debug_assertions) {
+         return false;
+     }
+@@ -2411,6 +2416,12 @@ async fn run_update_command(
+     trigger: auto_update::CliUpdateTrigger,
+     base_update_config: &UpdateConfig,
+ ) -> Result<()> {
++    if cfg!(target_os = "ios") {
++        anyhow::bail!(
++            "grok is package-managed on iOS; update it with your jailbreak package manager"
++        );
++    }
++
+     if json && !check {
+         anyhow::bail!("--json requires --check");
+     }

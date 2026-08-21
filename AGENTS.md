@@ -49,18 +49,51 @@ we will do. Consequences:
 - A vroot parent shell may export `SHELL=/bin/zsh`. That path is true *inside*
   the parent, and a lie to this process: `is_executable("/bin/zsh")` looks at
   the real rootfs and fails on both bootstraps.
-- Runtime lookup has to probe `/var/jb/bin` and `/var/jb/usr/bin` first. That
-  hits rootless for real, and hits roothide through the compatibility symlink
-  it keeps at `/var/jb`. Unprefixed `/bin` stays in the list for rootful and
-  for a future vroot-linked world we are not in.
+- On iOS, runtime lookup first derives RootHide candidates from the executable
+  directory: `.jbroot/bin` and `.jbroot/usr/bin`. RootHide's package manager
+  places that `.jbroot` link beside Mach-O files; the randomized jbroot is not
+  exposed through a stable `/var/jb` compatibility link.
+- Runtime lookup then probes `/var/jb/bin` and `/var/jb/usr/bin` for rootless.
+  Unprefixed `/bin` stays in the list for rootful and for a future
+  vroot-linked world we are not in.
 - **Packaging** is still two layouts. roothide dpkg unpacks an unprefixed tree
   into the jbroot it picked this boot; rootless dpkg unpacks under `/var/jb`.
   The architecture field (`iphoneos-arm64e` vs `iphoneos-arm64`) names that
-  layout. Do not infer the layout from `/var/jb` existing — roothide has the
-  symlink too. Ask `dpkg --print-architecture`.
+  layout. Do not infer the layout from a path probe. Ask
+  `dpkg --print-architecture`.
 
 Do not add `/var/jb` to patched source as "the rootless prefix". It is one
 candidate in a probe list.
+
+When an upstream release build embeds a helper executable but publishes no
+asset for iOS, cross-compile the exact upstream-declared helper version for the
+same target, validate its platform and architecture, and feed it through the
+upstream override contract. Never embed a Host binary or disable the feature
+to make the build pass.
+
+When a dependency intentionally reports an unsupported-platform error but an
+exhaustive `cfg` split prevents that target from compiling, extend only the
+platform-neutral branch needed to reach the existing error path. Do not enable
+another operating system's sandbox backend on iOS.
+
+When iOS shares a Darwin filesystem convention with macOS, widen only the
+path-classification helper that owns that convention. Do not globally alias
+iOS to macOS or enable desktop-only framework code.
+
+When an optional Unix facility has no iOS implementation, gate its dependency
+and implementation together, then route iOS through the product's existing
+explicit unsupported outcome. Do not patch a platform-specific dependency
+until its signal, ABI, and runtime contracts are actually supported.
+
+When an existing CoreAudio backend is otherwise platform-neutral, include iOS
+at the narrow module/re-export boundary and keep the same self-exec helper
+lifecycle. Do not duplicate the capture pipeline or fall back to a different
+audio transport solely to satisfy target cfgs.
+
+When a desktop-only detector exposes a different unsupported-target API, make
+the platform boundary return no observation and let the existing environment
+or terminal detection chain continue. Do not invent an iOS system preference
+or collapse the later fallbacks.
 
 ## Layout
 
@@ -109,6 +142,34 @@ vendor/nono/                 pinned nono 0.53.0 with the unsupported-OS dedup ke
 
 Test by installing, never by copying a binary onto `/var/mobile`. A copied
 binary runs with its entitlements ignored (trustcache never saw it).
+
+The aggregate dual-package target owns the expensive build once and feeds its
+one payload to both layout packagers. Release checksums and directory-based
+device installs select the exact package id, current version, and architecture;
+never use a broad `*.deb` match that can absorb stale artifacts.
+
+Because `UPSTREAM_REF` is a full commit SHA, source preparation may reuse that
+exact object from the local checkout; fetch only when the object is absent,
+then still resolve and verify the checked-out commit before patching.
+
+The public source repository has no release tags. Follow the official npm
+`latest` version, then select a recent public source sync whose lockstepped
+`xai-grok-version` crate matches it; validate the full patch stack before
+changing configuration, and never infer stable status from public `main`.
+
+For a package-managed iOS executable, disable the product's background
+self-updater and make its manual update command direct users to the jailbreak
+package manager. A downloaded replacement would bypass dpkg's layout,
+entitlement signing, and trust-cache registration even if the bytes could run.
+
+A tag pushed with a workflow's built-in GitHub token does not reliably start a
+second release workflow. The upstream-following workflow must publish its
+already-verified artifacts itself and retain an idempotent recovery path for a
+tag that exists without its corresponding GitHub Release.
+
+Before recovering a missing Release for an existing tag, peel the tag to its
+commit and require it to equal the checked-out build commit. Never attach
+artifacts built from current branch state to a tag that points somewhere else.
 
 ## The OwnGoalPackages contract
 

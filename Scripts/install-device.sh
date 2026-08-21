@@ -26,6 +26,8 @@ repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 # shellcheck source=../Configuration/upstream.env
 source "$repository_root/Configuration/upstream.env"
 : "${PROGRAM:?}"
+package_id_expected="${PACKAGE_ID:-wiki.qaq.grok}"
+package_version_expected="$(tr -d '[:space:]' <"$repository_root/Configuration/version.txt")"
 
 ssh_options=(
     -o BatchMode=yes
@@ -46,14 +48,11 @@ fi
 device_architecture="$(on_device 'dpkg --print-architecture')"
 
 if [[ -d "$target" ]]; then
-    shopt -s nullglob
-    matches=("$target"/*_"$device_architecture".deb)
-    shopt -u nullglob
-    ((${#matches[@]} == 1)) || {
-        echo "error: need exactly one *_$device_architecture.deb in $target, found ${#matches[@]}" >&2
+    deb="$target/${package_id_expected}_${package_version_expected}_${device_architecture}.deb"
+    [[ -f "$deb" ]] || {
+        echo "error: expected current package $deb" >&2
         exit 66
     }
-    deb="${matches[0]}"
 else
     deb="$target"
 fi

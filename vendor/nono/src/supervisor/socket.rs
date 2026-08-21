@@ -377,7 +377,7 @@ pub fn recv_fd_via_socket(sock_fd: RawFd) -> Result<OwnedFd> {
 }
 
 #[doc(hidden)]
-pub fn peer_credentials(sock_fd: RawFd) -> Result<PeerCredentials> {
+pub fn peer_credentials(_sock_fd: RawFd) -> Result<PeerCredentials> {
     #[cfg(target_os = "linux")]
     {
         use libc::{getsockopt, socklen_t, ucred, SOL_SOCKET, SO_PEERCRED};
@@ -387,7 +387,7 @@ pub fn peer_credentials(sock_fd: RawFd) -> Result<PeerCredentials> {
         let mut len = std::mem::size_of::<ucred>() as socklen_t;
         let ret = unsafe {
             getsockopt(
-                sock_fd,
+                _sock_fd,
                 SOL_SOCKET,
                 SO_PEERCRED,
                 &mut cred as *mut ucred as *mut libc::c_void,
@@ -417,7 +417,7 @@ pub fn peer_credentials(sock_fd: RawFd) -> Result<PeerCredentials> {
         let mut pid_len = std::mem::size_of::<libc::pid_t>() as socklen_t;
         let ret = unsafe {
             getsockopt(
-                sock_fd,
+                _sock_fd,
                 0,
                 LOCAL_PEERPID,
                 &mut pid as *mut libc::pid_t as *mut libc::c_void,
@@ -433,7 +433,7 @@ pub fn peer_credentials(sock_fd: RawFd) -> Result<PeerCredentials> {
 
         let mut uid: libc::uid_t = 0;
         let mut gid: libc::gid_t = 0;
-        let ret = unsafe { libc::getpeereid(sock_fd, &mut uid, &mut gid) };
+        let ret = unsafe { libc::getpeereid(_sock_fd, &mut uid, &mut gid) };
         if ret != 0 {
             return Err(NonoError::SandboxInit(format!(
                 "getpeereid failed: {}",

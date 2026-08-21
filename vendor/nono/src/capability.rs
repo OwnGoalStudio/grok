@@ -1315,14 +1315,14 @@ impl CapabilitySet {
     /// The dedup key is **platform-specific** because the two sandbox
     /// backends enforce path rules differently:
     ///
-    /// - **macOS (Seatbelt)** — key is `(original, is_file)`.  Seatbelt
-    ///   matches rules against the *literal* path the process presents to
-    ///   the kernel, before symlink resolution.  Two distinct symlinks that
+    /// - **Non-Linux platforms** — key is `(original, is_file)`. On macOS,
+    ///   Seatbelt matches rules against the *literal* path the process presents
+    ///   to the kernel, before symlink resolution. Two distinct symlinks that
     ///   resolve to the same canonical target therefore each need their own
-    ///   allow rule and must not be collapsed.  Non-symlink entries are
-    ///   unaffected because their `original` equals their `resolved`.
+    ///   allow rule and must not be collapsed. Other platforms retain this
+    ///   representation while reporting sandboxing as unsupported.
     ///
-    /// - **Non-macOS (Landlock / Linux)** — key is `(resolved, is_file)`.
+    /// - **Linux (Landlock)** — key is `(resolved, is_file)`.
     ///   Landlock rules are inode-based and the kernel unions all rules for
     ///   the same inode.  If two symlinks to the same target survived with
     ///   different access levels (e.g. User/Read and System/ReadWrite),
@@ -1331,7 +1331,7 @@ impl CapabilitySet {
     ///   a symlink entry is discarded its `original` is copied into the
     ///   surviving entry so that logging and struct consumers stay accurate.
     ///
-    /// Priority rules (both platforms):
+    /// Priority rules (all platforms):
     /// 1. **User/Profile source beats System/Group** regardless of access level.
     /// 2. **Same-source collisions** keep the highest access
     ///    (`ReadWrite > Read | Write`); complementary modes merge
@@ -1342,7 +1342,10 @@ impl CapabilitySet {
         // Dedup key strategy differs by platform because the two sandboxes
         // enforce path rules in fundamentally different ways:
         //
-        // macOS / Seatbelt — key on (original, is_file)
+        // Non-Linux — key on (original, is_file)
+        //   Unsupported platforms preserve literal entries while the sandbox
+        //   API reports UnsupportedPlatform. On macOS this is also required by
+        //   Seatbelt:
         //   Seatbelt evaluates rules against the *literal* path the process
         //   presents to the kernel, before symlink resolution.  Two distinct
         //   symlinks that point to the same canonical target therefore each
@@ -1375,11 +1378,9 @@ impl CapabilitySet {
 
         for (i, cap) in self.fs.iter().enumerate() {
             // Platform-specific dedup key (see comment above).
-            #[cfg(target_os = "macos")]
+            #[cfg(not(target_os = "linux"))]
             let key = (cap.original.clone(), cap.is_file);
             #[cfg(target_os = "linux")]
-            let key = (cap.resolved.clone(), cap.is_file);
-            #[cfg(not(any(target_os = "macos", target_os = "linux")))]
             let key = (cap.resolved.clone(), cap.is_file);
 
             if let Some(&existing_idx) = seen.get(&key) {

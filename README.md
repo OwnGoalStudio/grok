@@ -31,7 +31,9 @@ for `aarch64-apple-ios`, and produces the two packages.
 The Rust binary is **not** linked with RootHide's libvroot. C tools in the
 bootstrap (git, bash) can keep writing `/bin/sh` on roothide because vroot
 rewrites those APIs at compile time; this process talks to libSystem directly,
-so it has to probe for the bootstrap's shell. See `AGENTS.md`.
+so it resolves RootHide through the `.jbroot` link installed beside Mach-O
+files and probes the fixed `/var/jb` prefix separately for rootless. See
+`AGENTS.md`.
 
 ## Build it yourself
 
@@ -51,6 +53,13 @@ make install
 ```
 
 `make help` lists the rest.
+
+## Upstream tracking
+
+The weekly workflow checks the official npm `latest` version each Monday,
+maps it to the matching public source commit, replays the complete iOS patch
+stack, and publishes only after both packages pass the release build. It never
+downgrades a pin that is already newer than the stable npm channel.
 
 ## Credits
 

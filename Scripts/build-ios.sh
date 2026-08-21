@@ -64,6 +64,51 @@ mkdir -p "$cargo_home"
 export CARGO_HOME="$cargo_home"
 export CARGO_TARGET_DIR="$scratch_dir/target"
 
+# Release builds embed ripgrep in both the tools and shell crates. Upstream has
+# no ios-aarch64 release asset, so build the exact version those crates declare
+# for the same target instead of letting either build script download a host
+# binary or disabling the bundled search path.
+tools_build_script="$cargo_root/crates/codegen/xai-grok-tools/build.rs"
+shell_build_script="$cargo_root/crates/codegen/xai-grok-shell/build.rs"
+for build_script in "$tools_build_script" "$shell_build_script"; do
+    [[ -f "$build_script" ]] || {
+        echo "error: missing ripgrep build script: $build_script" >&2
+        exit 66
+    }
+done
+
+tools_rg_version="$(sed -n 's/^const RG_VER: &str = "\([^"]*\)";$/\1/p' "$tools_build_script")"
+shell_rg_version="$(sed -n 's/^const RG_VER: &str = "\([^"]*\)";$/\1/p' "$shell_build_script")"
+[[ -n "$tools_rg_version" && "$tools_rg_version" == "$shell_rg_version" ]] || {
+    echo "error: Grok ripgrep versions are missing or disagree: tools='$tools_rg_version', shell='$shell_rg_version'" >&2
+    exit 65
+}
+
+ripgrep_root="$scratch_dir/ripgrep-$tools_rg_version"
+ripgrep_binary="$ripgrep_root/bin/rg"
+if [[ ! -f "$ripgrep_binary" ]]; then
+    echo "building ripgrep $tools_rg_version for $rust_target" >&2
+    CARGO_TARGET_DIR="$scratch_dir/ripgrep-target" \
+        cargo +"$RUST_TOOLCHAIN" install ripgrep \
+            --version "$tools_rg_version" \
+            --locked \
+            --target "$rust_target" \
+            --root "$ripgrep_root" \
+            --no-track >&2
+fi
+
+ripgrep_build_version="$(vtool -show-build "$ripgrep_binary" 2>/dev/null)"
+grep -qE '^ *platform (IOS|2)$' <<<"$ripgrep_build_version" || {
+    echo "error: embedded ripgrep is not an iOS binary: $ripgrep_binary" >&2
+    exit 65
+}
+[[ "$(lipo -archs "$ripgrep_binary")" == "$ARCH" ]] || {
+    echo "error: embedded ripgrep is not a $ARCH binary: $ripgrep_binary" >&2
+    exit 65
+}
+export GROK_TOOLS_BUNDLE_RG_PATH="$ripgrep_binary"
+export GROK_SHELL_BUNDLE_RG_PATH="$ripgrep_binary"
+
 # Host rustc would happily emit a darwin Mach-O if the target flag is dropped.
 # The vtool check below is the backstop; this is the front.
 (
