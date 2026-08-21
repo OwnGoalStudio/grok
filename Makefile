@@ -50,7 +50,7 @@ $(error $(VERSION_FILE) is missing or empty; run make set-version VERSION=x.y.z)
 endif
 
 .PHONY: all help print-version print-upstream print-deb-path set-version \
-	bump-upstream check source build deb deb-roothide deb-rootless debs \
+	bump-upstream follow-upstream check source build package deb deb-roothide deb-rootless debs \
 	checksums install clean
 
 .NOTPARALLEL:
@@ -70,6 +70,7 @@ help:
 	@echo "  deb-rootless   Package for rootless (/var/jb, iphoneos-arm64)"
 	@echo "  debs           Both packages plus SHA256SUMS — what CI releases"
 	@echo "  install        Install onto a device over SSH and smoke-test it"
+	@echo "  follow-upstream  Adopt the newest official stable version, if newer"
 	@echo "  clean          Remove build/"
 	@echo
 	@echo "  make set-version VERSION=1.2.3   Set the package version"
@@ -124,7 +125,7 @@ build: source
 	@mkdir -p "$(BUILD_DIR)"
 	@"$(IOS_BUILDER)" "$(SRC_DIR)" "$(SCRATCH_DIR)" >"$(BIN_PATH_FILE)"
 
-deb: build
+package:
 	@mkdir -p "$(PKG_DIR)"
 	@PACKAGE_ID="$(PACKAGE_ID)" "$(DEB_PACKAGER)" \
 		"$$(cat "$(BIN_PATH_FILE)")" \
@@ -133,16 +134,24 @@ deb: build
 		"$(PACKAGE_ARCHITECTURE)" \
 		"$(PACKAGE_PREFIX)"
 
+deb: build package
+
 deb-roothide:
 	@$(MAKE) --no-print-directory PACKAGE_FLAVOR=roothide deb
 
 deb-rootless:
 	@$(MAKE) --no-print-directory PACKAGE_FLAVOR=rootless deb
 
-debs: deb-roothide deb-rootless checksums
+debs: build
+	@$(MAKE) --no-print-directory PACKAGE_FLAVOR=roothide package
+	@$(MAKE) --no-print-directory PACKAGE_FLAVOR=rootless package
+	@$(MAKE) --no-print-directory checksums
 
 checksums:
-	@cd "$(PKG_DIR)" && shasum -a 256 *.deb | tee SHA256SUMS
+	@cd "$(PKG_DIR)" && shasum -a 256 \
+		"$(PACKAGE_ID)_$(PACKAGE_VERSION)_iphoneos-arm64.deb" \
+		"$(PACKAGE_ID)_$(PACKAGE_VERSION)_iphoneos-arm64e.deb" \
+		| tee SHA256SUMS
 
 install: debs
 	@"$(DEVICE_INSTALLER)" "$(PKG_DIR)"
@@ -152,6 +161,9 @@ bump-upstream:
 	@sed -i '' -e "s|^UPSTREAM_REF=.*|UPSTREAM_REF=$(REF)|" "$(CONFIG_DIR)/upstream.env"
 	@echo "repinned upstream to $(REF)"
 	@$(MAKE) --no-print-directory build
+
+follow-upstream:
+	@"$(ROOT_DIR)/Scripts/follow-upstream.sh"
 
 clean:
 	rm -rf "$(BUILD_DIR)"

@@ -1,31 +1,64 @@
 diff --git a/crates/codegen/xai-grok-config/src/shell.rs b/crates/codegen/xai-grok-config/src/shell.rs
 --- a/crates/codegen/xai-grok-config/src/shell.rs
 +++ b/crates/codegen/xai-grok-config/src/shell.rs
-@@ -356,8 +356,10 @@
+@@ -356,9 +356,14 @@
  //   3. `which::which(name)` — walks `$PATH`. Catches NixOS profile shells in
  //      `/nix/store/...` or `/etc/profiles/per-user/<u>/bin/` when `/bin/bash`
  //      is absent.
 -//   4. A fixed candidate list: `{/bin, /usr/bin, /usr/local/bin,
 -//      /opt/homebrew/bin} × {bash,zsh}`.
-+//   4. A fixed candidate list: `{/var/jb/bin, /var/jb/usr/bin, /bin, /usr/bin,
+-//   5. Hardcoded `/bin/<name>` — historical behavior, only reached when every
++//   4. On iOS, paths below `.jbroot` beside the running Mach-O. RootHide adds
++//      that link to each directory containing a Mach-O, pointing at the
++//      randomized jailbreak root.
++//   5. A fixed candidate list: `{/var/jb/bin, /var/jb/usr/bin, /bin, /usr/bin,
 +//      /usr/local/bin, /opt/homebrew/bin} × {bash,zsh}`. `/var/jb` is probed
 +//      first because a rootless bootstrap has no `/bin/sh` at all, and a
 +//      Rust binary is not libvroot-linked so unprefixed paths stay on rootfs.
- //   5. Hardcoded `/bin/<name>` — historical behavior, only reached when every
++//   6. Hardcoded `/bin/<name>` — historical behavior, only reached when every
  //      earlier step has failed.
  //
-@@ -449,8 +451,12 @@
+ // The result is cached per kind in a process-wide `OnceLock`, so the cascade
+@@ -449,10 +454,34 @@
          return p.to_string_lossy().into_owned();
      }
  
 -    // 4) Common install dirs.
 -    for dir in ["/bin", "/usr/bin", "/usr/local/bin", "/opt/homebrew/bin"] {
-+    // 4) Common install dirs. Probe the rootless prefix first: iOS has no
++    // 4) RootHide gives every Mach-O directory a `.jbroot` link to the
++    //    randomized jailbreak root. This Rust binary is not libvroot-linked,
++    //    so it must derive a physical shell path from that link itself.
++    #[cfg(target_os = "ios")]
++    if let Ok(executable) = std::env::current_exe()
++        && let Some(executable_dir) = executable.parent()
++    {
++        for dir in ["bin", "usr/bin"] {
++            let p = executable_dir.join(".jbroot").join(dir).join(name);
++            if is_executable(&p) {
++                return p.to_string_lossy().into_owned();
++            }
++        }
++    }
++
++    // 5) Common install dirs. Probe the rootless prefix first: iOS has no
 +    //    /bin/sh on the real rootfs, and this binary does not go through
-+    //    libvroot, so `/bin/zsh` from a vroot parent is a lie. `/var/jb` is
-+    //    also the compatibility symlink roothide keeps, which is why one
-+    //    probe list covers both bootstraps.
-+    for dir in ["/var/jb/bin", "/var/jb/usr/bin", "/bin", "/usr/bin", "/usr/local/bin", "/opt/homebrew/bin"] {
++    //    libvroot, so `/bin/zsh` from a vroot parent is a lie.
++    for dir in [
++        "/var/jb/bin",
++        "/var/jb/usr/bin",
++        "/bin",
++        "/usr/bin",
++        "/usr/local/bin",
++        "/opt/homebrew/bin",
++    ] {
          let p = std::path::PathBuf::from(dir).join(name);
          if is_executable(&p) {
              return p.to_string_lossy().into_owned();
+         }
+     }
+@@ -460,4 +489,4 @@
+-    // 5) Hardcoded fallback — same as historical behavior. Spawn will fail at
++    // 6) Hardcoded fallback — same as historical behavior. Spawn will fail at
+     //    runtime on a pure NixOS host with no bash, but that's no worse than
+     //    before this resolver existed.
+     kind.hardcoded_default().to_string()

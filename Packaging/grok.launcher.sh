@@ -7,8 +7,8 @@
 # the install layout identical to kk and makes the prefix substitution for
 # the interpreter line a single code path.
 #
-# @PREFIX@ is substituted at package time: empty for roothide, whose package
-# is relocated into the jbroot it picked this boot and whose programs resolve
-# unprefixed paths inside it, and /var/jb for a rootless bootstrap, where
-# every path has to be spelled out — including this script's own interpreter.
+# The package prefix is substituted at package time: empty for roothide, where
+# this launcher is interpreted by the bootstrap's vroot-linked shell, and
+# /var/jb for rootless, where every path has to be spelled out — including
+# this script's own interpreter. The Rust process itself is not vroot-linked.
 exec @PREFIX@/usr/libexec/grok/grok "$@"

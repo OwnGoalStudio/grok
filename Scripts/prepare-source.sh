@@ -57,10 +57,14 @@ fi
 git -C "$work_dir" remote set-url origin "$UPSTREAM_REPO"
 rm -f "$stamp_file"
 
-echo "fetching $UPSTREAM_REPO at $UPSTREAM_REF"
-git -C "$work_dir" fetch --quiet --depth 1 --force origin "$UPSTREAM_REF"
-git -C "$work_dir" checkout --quiet --detach FETCH_HEAD
-git -C "$work_dir" reset --quiet --hard FETCH_HEAD
+if git -C "$work_dir" cat-file -e "$UPSTREAM_REF^{commit}" 2>/dev/null; then
+    echo "using cached upstream commit $UPSTREAM_REF"
+else
+    echo "fetching $UPSTREAM_REPO at $UPSTREAM_REF"
+    git -C "$work_dir" fetch --quiet --depth 1 --force origin "$UPSTREAM_REF"
+fi
+git -C "$work_dir" checkout --quiet --detach "$UPSTREAM_REF"
+git -C "$work_dir" reset --quiet --hard "$UPSTREAM_REF"
 git -C "$work_dir" clean -qfdx
 
 resolved_ref="$(git -C "$work_dir" rev-parse HEAD)"

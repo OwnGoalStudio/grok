@@ -1,0 +1,141 @@
+# Every Monday, map the newest stable official npm release back to its public
+# xai-org/grok-build source sync. Build both iOS layouts before atomically
+# pushing the pin commit and release tag.
+
+name: Follow upstream
+
+on:
+  schedule:
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: follow-upstream
+  cancel-in-progress: false
+
+jobs:
+  pin:
+    runs-on: macos-26
+    timeout-minutes: 180
+
+    steps:
+      - name: Check out packaging repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Find newest stable source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          current_version="$(make --no-print-directory print-version)"
+          echo "current $current_version @ $(make --no-print-directory print-upstream)"
+          ./Scripts/follow-upstream.sh
+          if git diff --quiet -- Configuration/upstream.env Configuration/version.txt; then
+            echo "changed=false" >>"$GITHUB_ENV"
+            tag="v${current_version}"
+            if git rev-parse "refs/tags/${tag}^{commit}" >/dev/null 2>&1 &&
+               ! gh release view "$tag" >/dev/null 2>&1; then
+              tag_commit="$(git rev-parse "refs/tags/${tag}^{commit}")"
+              head_commit="$(git rev-parse HEAD)"
+              if [[ "$tag_commit" != "$head_commit" ]]; then
+                echo "error: $tag points to $tag_commit, not the checked-out $head_commit" >&2
+                echo "refusing to attach artifacts built from a different commit" >&2
+                exit 65
+              fi
+              echo "release $tag is missing; rebuilding its exact commit"
+              {
+                echo "publish=true"
+                echo "new_version=${current_version}"
+                echo "new_ref=$(make --no-print-directory print-upstream)"
+              } >>"$GITHUB_ENV"
+            else
+              echo "publish=false" >>"$GITHUB_ENV"
+            fi
+            exit 0
+          fi
+          new_version="$(make --no-print-directory print-version)"
+          new_ref="$(make --no-print-directory print-upstream)"
+          if git rev-parse "refs/tags/v${new_version}" >/dev/null 2>&1; then
+            echo "tag v${new_version} already exists at a different packaging state" >&2
+            exit 1
+          fi
+          echo "selected $new_version @ $new_ref"
+          {
+            echo "changed=true"
+            echo "publish=true"
+            echo "new_version=${new_version}"
+            echo "new_ref=${new_ref}"
+          } >>"$GITHUB_ENV"
+
+      - name: Select newest Xcode
+        if: env.publish == 'true'
+        run: |
+          latest="$(find /Applications -maxdepth 1 -type d -name 'Xcode*.app' -print | sort -V | tail -n1)"
+          sudo xcode-select -s "$latest/Contents/Developer"
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Install packaging tools
+        if: env.publish == 'true'
+        run: brew install ldid dpkg
+
+      - name: Read Rust toolchain
+        if: env.publish == 'true'
+        id: rust
+        run: |
+          toolchain="$(sed -n 's/^RUST_TOOLCHAIN=//p' Configuration/upstream.env)"
+          test -n "$toolchain"
+          echo "toolchain=$toolchain" >>"$GITHUB_OUTPUT"
+
+      - name: Install Rust
+        if: env.publish == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ steps.rust.outputs.toolchain }}
+          targets: aarch64-apple-ios
+
+      - name: Install DotSlash
+        if: env.publish == 'true'
+        run: |
+          cargo install dotslash --locked
+          /usr/bin/env dotslash --help >/dev/null
+
+      - name: Build and verify both packages
+        if: env.publish == 'true'
+        run: |
+          make check
+          make debs
+          (cd build/Packages && shasum -a 256 -c SHA256SUMS)
+
+      - name: Commit pin and tag
+        if: env.changed == 'true'
+        run: |
+          git config user.name "bot"
+          git config user.email "bot@owngoal.dev"
+          git add Configuration/upstream.env Configuration/version.txt
+          git commit -m "Bump upstream to v${new_version}
+
+          xai-org/grok-build ${new_ref}
+          "
+          git tag "v${new_version}"
+          git push --atomic origin HEAD:main "refs/tags/v${new_version}"
+
+      - name: Publish GitHub release
+        if: env.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v${new_version}"
+          ./Scripts/release-notes.sh "$tag" >/tmp/release-notes.md
+          gh release create "$tag" \
+            --title "grok $tag" \
+            --notes-file /tmp/release-notes.md \
+            build/Packages/*.deb build/Packages/SHA256SUMS \
+          || { gh release edit "$tag" --notes-file /tmp/release-notes.md &&
+               gh release upload "$tag" \
+                 build/Packages/*.deb build/Packages/SHA256SUMS --clobber; }
