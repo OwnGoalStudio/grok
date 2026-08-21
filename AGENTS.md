@@ -84,6 +84,8 @@ build/                       everything generated; not source
 - `make source` — fetch + patch; fails loudly if a patch no longer applies
 - `make build` — cross-compile and verify the Mach-O is iOS
 - `make debs` — both packages plus `SHA256SUMS`; what CI releases
+- Release runners must install DotSlash before `make debs`; the pinned
+  grok-build tree's `bin/protoc` is a DotSlash launcher.
 - `make install` — install on an attached device and run `--version`.
   Over USB: `iproxy 4422:2222 &`
 

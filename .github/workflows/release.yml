@@ -49,6 +49,11 @@ jobs:
           toolchain: "1.94.0"
           targets: aarch64-apple-ios
 
+      - name: Install DotSlash
+        run: |
+          cargo install dotslash --locked
+          /usr/bin/env dotslash --help >/dev/null
+
       - name: Set version from tag
         if: github.ref_type == 'tag'
         run: make set-version VERSION="${GITHUB_REF_NAME}"
